@@ -25,9 +25,32 @@ $backupDir=$homeDirectory . "/Library/Containers/2BUA8C4S2C.com.agilebits.onepas
 $destDir=shift(@ARGV);
 # To-do: Some checking/sanitization to make sure this looks like a directory. 
 
-opendir(BACKUP, $backupDir);
+# Determine the name of the current 1Password backup in the destination, if any. 
+opendir(DEST, $destDir) or die("Couldn't open destination directory $destDir: $!");
+# Get a list of files in the destination directory. 
+@names=readdir(DEST) or die("Unable to read file names in $destDir: $!");
+close(DEST);
+
+$previousBackup=0;
+
+foreach $name (@names)
+{
+	if ($name=~ /1Password \d{4}-\d{2}-\d{2} \d{2}_\d{2}_\d{2} \(\d+ profiles, \d+ items, \d+ folders, \d+ attachments\)\.1p4_zip/)
+	{
+		$previousBackup=$name;
+		print("Found previous backup \"$previousBackup.\"\n");
+	}
+}
+
+if (!$previousBackup)
+{
+	print("Couldn't find a previous backup in destination.\n");
+}
+
+
+opendir(BACKUP, $backupDir) or die("Couldn't open backup directory $backupDir: $!");
 # Get a list of files in the backup directory. 
-@names=readdir(BACKUP) or die("Unable to read file names in $backupDir: $!");
+@names=readdir(BACKUP) or die("Couldn't read file names in $backupDir: $!");
 close(BACKUP);
 
 # Keep track of the newest backup in the directory, based on timestamp in filename. 
@@ -52,5 +75,25 @@ foreach $name (@names)
 	}
 }
 
-# Copy the newest backup file to the destination directory. 
-copy($backupDir . $newestfile, $destDir . $newestfile) or die("Unable to copy file: $!");
+print("Found new backup file $newestfile\n");
+
+
+# If the newest 1Password backup has a different name than the current 1Password backup in the destination: 
+if ($newestfile ne $previousBackup)
+{
+	copy($backupDir . $newestfile, $destDir . $newestfile) or die("Unable to copy \"$backupDir$newestfile\" to \"$destDir$newestfile\": $!");	
+	print("Copied \"$backupDir$newestfile\" to \"$destDir$newestfile\".\n");
+	if ($previousBackup)
+	{
+		unlink($destDir . $previousBackup) or die("Unable to remove old backup file \"$destDir$previousBackup\": $1");
+		print("Deleted old backup \"$destDir$previousBackup\"\n");
+	}
+	else
+	{
+		print("Didn't clean up any previous backups.\n");
+	}
+}
+else
+{
+	print("Newest backup file \"$newestfile\" appears identical to destination file \"$previousBackup\".\n");
+}
